@@ -1,0 +1,374 @@
+---
+title: "King, Harshita, Shanzeh Final Project MGSC 310"
+output: html_document
+date: "2022-12-08"
+---
+
+```{r setup, include=FALSE}
+
+# Please leave this code chunk as is. It makes some slight formatting changes to alter the output to be more aesthetically pleasing. 
+
+library(knitr)
+
+# Change the number in set seed to your own favorite number
+set.seed(1818)
+options(width=70)
+options(scipen=99)
+
+
+# this sets text outputted in code chunks to small
+opts_chunk$set(tidy.opts=list(width.wrap=50),tidy=TRUE, size = "vsmall")  
+opts_chunk$set(message = FALSE,                                          
+               warning = FALSE,
+               # "caching" stores objects in code chunks and only rewrites if you change things
+               cache = FALSE,                               
+               # automatically downloads dependency files
+               autodep = TRUE,
+               # 
+               cache.comments = FALSE,
+               # 
+               collapse = TRUE,
+               # change fig.width and fig.height to change the code height and width by default
+               fig.width = 5.5,  
+               fig.height = 4.5,
+               fig.align='center')
+
+
+```
+
+```{r setup-2}
+
+# Always print this out before your assignment
+sessionInfo()
+getwd()
+
+```
+
+```{r setup-3}
+
+# load all your libraries in this chunk 
+library('tidyverse')
+library('sjPlot')
+library('here')
+library('dplyr')
+library('ggplot2')
+library('forcats')
+library('rsample')
+library("glmnet")
+library("glmnetUtils")
+library('forcats')
+library('broom')
+library('NbClust')
+library('cluster')
+library('ggcorrplot')
+library('partykit')
+library('corrplot')
+library('vtable')
+library('ggridges')
+library('ISLR')
+library("dplyr")
+library("forcats")
+library("readr")
+library("purrr")
+library("ggplot2")
+library("plotROC")
+# note, do not run install.packages() inside a code chunk. install them in the console outside of a code chunk. 
+
+```
+
+
+```{r}
+
+
+etsy <- read_csv("datasets/etsy_shops_data.csv")
+etsy = na.omit(etsy)
+dim(etsy)
+
+```
+
+
+
+```{r}
+
+summary(etsy)
+# mean, minimum, macimum
+
+```
+
+
+```{r}
+
+etsy_clean=(select(etsy,-creation_date, -currency_code, ))
+
+```
+
+
+```{r}
+etsy_clean<-
+  etsy_clean %>% 
+  mutate(shop_location = 
+           fct_lump_n(shop_location,n=15))
+table(etsy_clean$shop_location)
+```
+
+```{r}
+glimpse(etsy_clean)
+
+```
+
+
+```{r}
+
+summary(etsy_clean)
+
+```
+
+```{r}
+st(etsy_clean)
+
+```
+
+
+```{r}
+
+sumtable(etsy_clean,vars=NA,
+         out=NA,
+         file=NA,
+         summ=NA,
+         summ.names=NA,
+         add.median=FALSE,
+         group=NA,
+         group.long=FALSE,
+         group.test=FALSE,
+         group.weights =NA,
+         col.breaks=NA,
+         digits=NA,
+         fixed.digits=FALSE,
+         factor.percent=TRUE,
+         factor.counts=TRUE,
+         factor.numeric=FALSE,
+         logical.numeric=FALSE,
+         logical.labels=c('No','Yes'),
+         labels=NA,
+         title='Summary Statistics',
+         note = NA, 
+         anchor=NA,
+         col.width=NA,
+         col.align=NA,
+         align=NA,
+         note.align='l',
+         fit.page=NA,
+         simple.kable=FALSE,
+         opts=list())
+```
+
+
+```{r}
+
+ggplot( etsy_clean, aes(x = review_count , y = shop_location)) + geom_density_ridges(scale=1 , color='blue')
+```
+
+```{r}
+ggplot(data= etsy_clean, aes(x = shop_location)) + geom_histogram(stat="count")+coord_flip()
+```
+
+
+```{r}
+ggplot(etsy_clean,aes(x= sales_count ,y= review_count))+
+  geom_point(alpha=0.2)+
+  facet_wrap(etsy_clean$shop_location)+
+  geom_smooth(method="glm")+
+  coord_cartesian(xlim=c(-100,100),ylim=c(-100,100))
+```
+Linear Regression Model:
+
+```{r}
+set.seed(1818)
+etsy_split<- initial_split(etsy_clean,prop=0.75)
+etsy_train<-training(etsy_split)
+etsy_test<-testing(etsy_split)
+
+
+```
+
+```{r}
+sales_favorers <- lm(sales_count~num_favorers+
+                       listing_active_count + 
+                       review_count, 
+                     data= etsy_train)
+
+summary(sales_favorers)
+
+
+```
+
+
+
+```{r}
+tab_model(sales_favorers)
+#plot_model(sales_favorers)
+tidy(sales_favorers)
+
+```
+
+
+```{r}
+ggplot(etsy_clean,aes(x=num_favorers,y=sales_count))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method="lm")+
+  theme_minimal(base_size=16)
+  
+  
+
+```
+
+```{r}
+preds_train<-predict(sales_favorers,newdata=etsy_train)
+preds_test<-predict(sales_favorers,newdata=etsy_test)
+
+results_train <- 
+  tibble(
+    `preds` = preds_train,
+    `true` = etsy_train$sales_count,
+    `type` = "train")
+
+results_test <- 
+  tibble(
+    `preds` = preds_test,
+    `true` = etsy_test$sales_count,
+    `type` = "test")
+
+results_df <- 
+  bind_rows(results_train, results_test)
+
+
+```
+
+```{r}
+ggplot(results_df,aes(x=true,y=preds))+
+  geom_point(aes(color=type))+
+  geom_abline(color ="red")+
+  facet_wrap(~type)+
+  xlim(10,40)+ylim(10,40)+
+  theme_minimal(base_size=16)+
+  theme(legend.position="bottom")
+
+
+
+```
+
+Decision Tree Model:
+
+following code: changes our variables we want to use for this model into factorized variables to allow for decision tree to work
+```{r}
+etsy_clean<- etsy %>% as_tibble() %>% 
+  mutate(listing_active_count_tree = if_else(listing_active_count != 0, 
+                                        "has listings","none"),
+listing_active_count_tree =as.factor(listing_active_count_tree)) %>% 
+  mutate(num_favorers_tree = if_else(num_favorers != 0, 
+                                        "has followers","none"),
+         num_favorers_tree = as.factor(num_favorers_tree)) %>% 
+  mutate(review_count_tree = if_else(review_count <= 0, 
+                                        "has review","none"),
+         review_count_tree = as.factor(review_count_tree)) %>% 
+  mutate(sales_count_tree = if_else(sales_count <= 0, 
+                                        "has sales","none"),
+         sales_count_tree = as.factor(sales_count_tree)) %>%
+  mutate(sale_message_tree = as.factor(sale_message)) %>% 
+  mutate(is_shop_us_based_tree = as.factor(is_shop_us_based)) %>% 
+  mutate_if(is.character,as.factor) %>% 
+  mutate_if(is.logical,as.factor)
+```
+
+```{r}
+etsy_tree <- ctree(sales_count_tree ~ review_count_tree + num_favorers_tree + listing_active_count_tree + sale_message_tree + is_shop_us_based_tree,
+                   data = etsy_clean,
+                   control = partykit:: ctree_control(alpha = 0.1, minbucket =50 ))
+plot(etsy_tree)
+
+```
+
+Logistic Regression Model:
+
+```{r}
+etsy_split <- initial_split(etsy_clean, prop = 0.75)
+etsy_train <- training(etsy_split)
+etsy_test <- testing(etsy_split)
+```
+
+```{r}
+etsy_logit2 <-
+  glm(sales_count_tree ~ is_shop_us_based_tree + review_count + num_favorers + listing_active_count,
+     family = binomial,
+      data = etsy_train)
+
+summary(etsy_logit2)
+
+```
+
+```{r}
+
+exp(etsy_logit2$coefficients)
+
+```
+
+```{r}
+preds_test2 <- predict(etsy_logit2,
+                      type = "response",
+                      newdata = etsy_test)
+preds_train2 <- predict(etsy_logit2, 
+                       type = "response",
+                       newdata = etsy_train)
+head(preds_test2)
+
+head(preds_train2)
+
+```
+
+
+
+```{r}
+results_train <- 
+  tibble(
+  `true_class` = etsy_train$sales_count_tree,
+  `prob_event` = preds_train
+    )
+
+results_test <- 
+  tibble(
+  `true_class` = etsy_test$sales_count_tree,
+  `prob_event` = preds_test
+  )
+
+results_df <- 
+  bind_rows(results_train, results_test)
+
+
+```
+
+```{r}
+roc_train <- ggplot(results_train, 
+             aes(m = prob_event, d = true_class)) + 
+  geom_roc(labelsize = 3.5, 
+  cutoffs.at = c(0.9,0.8,0.7,0.5,0.3,0.1)) +labs(title = "Train ROC")+    theme_minimal(base_size = 16)
+print(roc_train)
+
+```
+```{r}
+roc_test <-ggplot(results_test, 
+           aes(m = prob_event, d = true_class)) + geom_roc(labelsize = 3.5,     cutoffs.at = c(0.9,0.8,0.7,0.5,0.3,0.1)) + labs(title = "Test ROC")+ theme_minimal(base_size = 16)
+print(roc_test)
+
+```
+
+
+```{r}
+calc_auc(roc_train)
+calc_auc(roc_test)
+```
+```{r}
+tab_model(etsy_logit2)
+tidy(etsy_logit2)
+
+```
+
